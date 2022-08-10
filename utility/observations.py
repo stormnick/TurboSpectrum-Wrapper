@@ -128,7 +128,12 @@ class spectrum(object):
             print(F"Convolving spectrum from R={self.R} to R={R_new}...")
         fwhmMean = (np.mean(self.lam)/R_new) / (2.0 * np.sqrt(2. * np.log(2.))) / self.lam_step
         x_size=1501*int(fwhmMean)
-        for e in range(int(len(self.lam)/x_size)+1):
+        if x_size % 2 == 0:
+            x_size += 1 
+        nbins = int(len(self.lam)/x_size)+1
+        if nbins > len(self.lam):
+            nbins = len(self.lam)
+        for e in range(nbins):
             fwhm = (np.mean(self.lam[e*x_size:(e+1)*x_size])/R_new) / (2.0 * np.sqrt(2. * np.log(2.))) /self.lam_step
             kernel = convolution.Gaussian1DKernel(fwhm)
             self.flux[e*x_size:(e+1)*x_size] =  convolution.convolve(self.flux[e*x_size:(e+1)*x_size], kernel, fill_value=1)
@@ -161,7 +166,12 @@ class spectrum(object):
 
                 # kernel should always have odd size  along all axis
                 x_size=1501*int(fwhmMean)
-                for e in range(int(len(self.lam)/x_size)+1):
+                if x_size % 2 ==0:
+                    x_size += 1 
+                nbins = int(len(self.lam)/x_size)+1
+                if nbins > len(self.lam):
+                    nbins = len(self.lam)
+                for e in range(nbins):
                     fwhm = self.Vrot * np.mean(self.lam[e*x_size:(e+1)*x_size]) / const.c.to('km/s').value / self.lam_step
                     rot_kernel = convolution.Model1DKernel(rotation(fwhm), x_size=x_size )
                     self.flux[e*x_size:(e+1)*x_size] = convolution.convolve(self.flux[e*x_size:(e+1)*x_size], rot_kernel, fill_value=1)
@@ -198,7 +208,12 @@ class spectrum(object):
 
                 # kernel should always have odd size along all axis
                 x_size=1501*int(fwhmMean)
-                for e in range(int(len(self.lam)/x_size)+1):
+                if x_size % 2 ==0:
+                    x_size += 1 
+                nbins = int(len(self.lam)/x_size)+1
+                if nbins > len(self.lam):
+                    nbins = len(self.lam)
+                for e in range(nbins):
                     fwhm = self.Vmac * np.mean(self.lam[e*x_size:(e+1)*x_size]) / const.c.to('km/s').value / self.lam_step
                     macro_kernel = convolution.Model1DKernel( rad_tang(fwhm), x_size=x_size )
                     self.flux[e*x_size:(e+1)*x_size] = convolution.convolve(self.flux[e*x_size:(e+1)*x_size], macro_kernel, fill_value=1)
