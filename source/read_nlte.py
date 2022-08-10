@@ -201,22 +201,20 @@ please supply new depth scale.")
             depart[infMask] = 1.
             levSubst.extend(np.unique(infMask[1]))
             depthSubst.extend(np.unique(infMask[0]))
-        if rescale:
-            f_int = interp1d(tau, np.log10(depart), fill_value='extrapolate')
-            depart = 10**f_int(depthScale)
-            tau = depthScale
-# questinable, but I tested, and they somethimes go from 0.01 to -0.1, so...
-# I don't know, Maria doesn't give me time to think or do things properly, I am so tired
-        if np.isinf(depart).any():
-            infMask = np.where(np.isinf(depart))
-            depart[infMask] = 1.
-            levSubst.extend(np.unique(infMask[1]))
-            depthSubst.extend(np.unique(infMask[0]))
         if (depart < 0).any():
             negMask = np.where( depart < 0 )
             levSubst.extend(np.unique(negMask[1]))
             depthSubst.extend(np.unique(negMask[0]))
-            depart[negMask] = 0.
+            depart[negMask] = 1e-20
+        if rescale:
+            depart = depart + 1e-20
+            f_int = interp1d(tau, np.log10(depart), fill_value='extrapolate')
+            depart = 10**f_int(depthScale)
+            if np.isnan(depart).any():
+                print('NaN at ', p)
+            tau = depthScale
+# questinable, but I tested, and they somethimes go from 0.01 to -0.1, so...
+# I don't know, Maria doesn't give me time to think or do things properly, I am so tired
         data['depart'][i] = depart
         data['depthScale'][i] = tau
 
