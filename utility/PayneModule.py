@@ -53,7 +53,7 @@ def compareSpectra(arg):
     return comparison
 def leakyReLu(z):
     # first layer?
-    z*(z > 0) + 0.01*z*(z < 0)
+    return z*(z > 0) + 0.01*z*(z < 0)
 def restore(wavelen, NNet, labels):
     """ Normalised labels """
     labels = np.array(labels)
@@ -62,7 +62,8 @@ def restore(wavelen, NNet, labels):
     """ layers ??? """
     l1 = np.dot(NNet['w_array_0'], labels) + NNet['b_array_0']
 
-    l1[l1<0.0]=0.0
+    #l1[l1<0.0]=0.0
+    l1 = leakyReLu(l1)
 
     l2 = np.dot( NNet['w_array_1'], l1 ) + NNet['b_array_1']
     l2 = 1.0 / (1.0 + np.exp(-l2) )
@@ -70,7 +71,6 @@ def restore(wavelen, NNet, labels):
     predictFlux = np.dot( NNet['w_array_2'], l2 ) + NNet['b_array_2']
     """ Interpolate flux to the new requested wavelength scale """
     flux = np.interp(wavelen, NNet['wvl'], predictFlux)
-
     """ return wavelength and flux """
     return flux
 
@@ -81,7 +81,8 @@ def restoreFromNormLabels(wavelen, NNet, labelsNorm):
     """ layers ??? """
     l1 = np.dot(NNet['w_array_0'], labels) + NNet['b_array_0']
 
-    l1[l1<0.0]=0.0
+    #l1[l1<0.0]=0.0
+    l1 = leakyReLu(l1)
 
     l2 = np.dot( NNet['w_array_1'], l1 ) + NNet['b_array_1']
     l2 = 1.0 / (1.0 + np.exp(-l2) )
