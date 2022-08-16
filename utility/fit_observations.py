@@ -4,11 +4,10 @@ import os
 import glob
 import pickle
 from scipy import interpolate
-from observations import readSpectrumTSwrapper, spectrum, read_observations
-from convolve_JG import conv_res, conv_macroturbulence, conv_rotation
+from .observations import readSpectrumTSwrapper, spectrum, read_observations, convolve_gauss
 from multiprocessing import Pool
 from scipy.optimize import curve_fit, fmin_bfgs
-from PayneModule import restore, restoreFromNormLabels, readNN
+from .PayneModule import restore, restoreFromNormLabels, readNN
 import sys
 import cProfile
 import pstats
@@ -23,37 +22,26 @@ def callNN(wavelength, obsSpec, NN, p0, freeLabels, setLabels, quite=True):
 
     labels = setLabels.copy()
     labels[freeLabels] = p0
-    #labels[-1] = np.random.random()*50
-    #labels[-2] = np.random.random()*5
+    Vbroad = labels[-1] 
 
-    Vrot = labels[-1] 
-    Vmac = labels[-2] 
-
-    #labels[~freeLabels][1:-2] = labels[~freeLabels][1:-2] + labels[3] # feh
-    flux = restore(wavelength, NN, labels[:-2]) 
-    fwhm = (np.mean(wavelength) / obsSpec.R) * 1e3
-    #wavelength, flux = conv_res(wavelength, flux, fwhm)
-    #wavelength, flux = conv_macroturbulence(wavelength, flux, Vmac)
-#    wavelength, flux = conv_rotation(wavelength, flux, Vrot)
-    spec = spectrum(wavelength, flux, res = np.inf)
-    
-    spec.convolve_resolution( obsSpec.R )
-    spec.convolve_macroturbulence( labels[-2] , quite=quite)
-    spec.convolve_rotation( labels[-1], quite=quite)
-    chi2 = np.sqrt(np.sum(obsSpec.flux - flux)**2)
-    print(labels, chi2)
-    #return flux
-    return spec.flux
+    flux = restore(wavelength, NN, labels[:-1]) 
+    if Vbroad > 0.0:
+        flux = convolve_gauss(wavelength, flux, Vbroad, mode='broad')
+    if NN['res'] < np.inf:
+        flux = convolve_gauss(wavelength, flux, NN['res'], mode='res')
+    #chi2 = np.sqrt(np.sum(obsSpec.flux - flux)**2)
+    #print(labels, chi2)
+    return flux
 
 def fitToNeuralNetwork(obsSpec, NN, prior = None, quite = True):
 
-    freeLabels = np.full(len(NN['labelsKeys'])+2, True)
-    setLabels = np.full(len(NN['labelsKeys'])+2, 0.0)
+    freeLabels = np.full(len(NN['labelsKeys'])+1, True)
+    setLabels = np.full(len(NN['labelsKeys'])+1, 0.0)
     if isinstance(prior, type(None)):
         pass
     else:
-        if len(prior)  < len(NN['labelsKeys']) + 2:
-            for i, l in enumerate( np.hstack( (NN['labelsKeys'], ['vmac', 'vrot']))):
+        if len(prior)  < len(NN['labelsKeys']) + 1:
+            for i, l in enumerate( np.hstack( (NN['labelsKeys'], ['vbroad']))):
                 l = l.lower()
                 if l in prior:
                     freeLabels[i] = False
@@ -68,10 +56,10 @@ def fitToNeuralNetwork(obsSpec, NN, prior = None, quite = True):
     """
 
     initLabels = []
-    norm = {'min' : np.hstack( [NN['x_min'], [0, 0]] ), 'max': np.hstack( [NN['x_max'], [100, 10]] ) }
-    for i, l in enumerate( np.hstack( (NN['labelsKeys'], ['vmac', 'vrot']))):
+    norm = {'min' : np.hstack( [NN['x_min'], [0]] ), 'max': np.hstack( [NN['x_max'], [100]] ) }
+    for i, l in enumerate( np.hstack( (NN['labelsKeys'], ['vbroad']))):
         if freeLabels[i]:
-            initLabels.append( np.mean( (norm['min'][i], norm['max'][i] ) )  + prior['feh'])
+            initLabels.append( np.mean( (norm['min'][i], norm['max'][i] ) ) )
     """
     Resampled (and cut if needed)  observed spectrum to the wavelength points 
     provided in the ANN
@@ -95,95 +83,69 @@ def fitToNeuralNetwork(obsSpec, NN, prior = None, quite = True):
                     )
     " restore normalised labels "
     setLabels[freeLabels] = popt
-  #  setLabels = (setLabels+ 0.5)*( norm['max'] - norm['min'] ) + norm['min']
-    flux =  restore(obsSpec.lam, NN, setLabels[:-2])
+
     wavelength = obsSpec.lam
-    wavelength, flux = conv_res(wavelength, flux, 1e3 * np.mean(wavelength)/obsSpec.R )
-    wavelength, flux = conv_macroturbulence(wavelength, flux, setLabels[-2])
-#    wavelength, flux = conv_rotation(wavelength, flux, setLabels[-1])
-
-    #spec = spectrum(
-    #                obsSpec.lam,
-    #                restore(obsSpec.lam, NN, setLabels[:-2]), res = np.inf
-    #                )
-    #spec.convolve_resolution(obsSpec.R)
-    #spec.convolve_macroturbulence( setLabels[-2] , quite=quite)
-    #spec.convolve_rotation( setLabels[-1], quite=quite)
-
-    np.savetxt(f"./{obsSpec.ID}_modelFlux.dat", np.vstack([obsSpec.lam, obsSpec.flux, flux]).T )
+    flux =  restore(wavelength, NN, setLabels[:-1])
+    if setLabels[-1] > 0.0: # vbroad
+        flux = convolve_gauss(wavelength, flux, setLabels[-1], mode='broad')
+    if NN['res'] < np.inf:
+        flux = convolve_gauss(wavelength, flux, NN['res'], mode='res')
+#    np.savetxt(f"./{obsSpec.ID}_modelFlux.dat", np.vstack([wavelength, flux, flux]).T )
     chi2 = np.sqrt(np.sum(obsSpec.flux - flux)**2)
     return setLabels, chi2
 
 
-def internalAccuracyFitting():
-    if len(argv) < 4:
-        print("Usage: $ python ./fit_observations.py \
-<path to model spectra or payne NN> <path to observed spectra> fit-for-key e.g. 'mg'")
-        exit()
-    "Fit using Payne neural network"
-    nnPath = argv[1]
-    NNs = glob.glob(nnPath)
-    print(f"found {len(NNs)} ANNs")
-    obsPath = argv[2]
-    specList = glob.glob(obsPath)
+def internalAccuracyFitting(nnPath, specList, solveFor=None):
+    print(f"Solving for {solveFor}...")
+
     print(f"found {len(specList)} observed spectra")
-  
-    solveFor = None
-    if len (argv)>3:
-        solveFor = argv[3]
-        print(f"Solving for {solveFor}...")
     
-    for nnPath in NNs:
-        NN = readNN(nnPath)
-        NNid = nnPath.split('/')[-1].replace('.npz', '').strip() 
-        if not isinstance(solveFor, type(None)):
-            if solveFor not in NN['labelsKeys']:
-                print(f"No key {solveFor} in requested NN {nnPath}")
+    NN = readNN(nnPath)
+    NNid = nnPath.split('/')[-1].replace('.npz', '').strip() 
+    if not isinstance(solveFor, type(None)):
+        if solveFor not in NN['labelsKeys']:
+            print(f"No key {solveFor} in requested NN {nnPath}")
+            exit()
+
+    out = {'file':[], 'chi2':[], 'vmac':[], 'vrot':[], f"diff_{solveFor}":[]}
+    with open(f"./fittingResults_{NNid}_fitFor{solveFor}.dat", 'w') as LogResults:
+        LogResults.write( "#" + '\t'.join(NN['labelsKeys']) + f' Vbroad chi2 {solveFor}_bestFit\n' )
+        for obsSpecPath in specList:
+            out['file'].append(obsSpecPath)
+            obsSpec = readSpectrumTSwrapper(obsSpecPath)
+            obsSpec.ID = obsSpecPath.split('/')[-1].replace('.dat', '')
+            if solveFor not in obsSpec.__dict__.keys():
+                print(f"No key {solveFor} in spectrum {obsSpecPath}")
                 exit()
 
-        out = {'file':[], 'chi2':[], 'vmac':[], 'vrot':[], f"diff_{solveFor}":[]}
-        with open(f"./fittingResults_{NNid}_fitFor{solveFor}.dat", 'w') as LogResults:
-            LogResults.write( "#" + '\t'.join(NN['labelsKeys']) + ' Vmac    Vrot  chi2\n' )
-            for obsSpecPath in specList:
-                print(obsSpecPath)
-                out['file'].append(obsSpecPath)
-                obsSpec = readSpectrumTSwrapper(obsSpecPath)
-                if solveFor not in obsSpec.__dict__.keys():
-                    print(f"No key {solveFor} in spectrum {obsSpecPath}")
-                    exit()
-                obsSpec.convolve_resolution(NN['res'])
-                # resolution is considered constant, therefore FWHM will be bigger for smaller wavelngth range
-                # be careful with the resolution convolution for both observations and ANN restored fluxes
-                obsSpec.cut([min(NN['wvl']), max(NN['wvl'])] )
-                #obsSpec.cut([5182, 5185] )
-                obsSpec.ID = obsSpecPath.split('/')[-1].replace('.dat', '')
-    
-                prior = None
-                if not isinstance(solveFor, type(None)):
-                    prior = {}
-                    for l in NN['labelsKeys']:
-                        if l.lower() != solveFor.lower():
-                            prior[l.lower()] = obsSpec.__dict__[l]
-                    #prior['vmac'] = 0
-                    #prior['vrot'] = 0
-    
-                labelsFit, bestFitChi2 = fitToNeuralNetwork(obsSpec, NN, prior = prior, quite=True)
-                for i, l in enumerate(NN['labelsKeys']):
-                    if l not in out:
-                        out.update({l:[]})
-                    out[l].append(labelsFit[i])
-                out[f"diff_{solveFor}"].append( obsSpec.__dict__[solveFor] - out[solveFor][-1] )
-                d =  out[f"diff_{solveFor}"][-1]
-                print(f"Difference in {solveFor} is {d:.3f}")
-                out['vmac'].append(labelsFit[-2])
-                out['vrot'].append(labelsFit[-1])
-                out['chi2'].append(bestFitChi2)
-                   
-                LogResults.write( f"{obsSpec.ID} " + '\t'.join(f"{l:.3f}" for l in labelsFit) + f"{bestFitChi2 : .3f}\n")
-        for k in out.keys():
-            out[k] = np.array(out[k])
-        with open(f'./fittingResults_{NNid}_fitFor{solveFor}.pkl', 'wb') as f:
-            pickle.dump(out, f)
+            obsSpec.cut([min(NN['wvl']), max(NN['wvl'])] )
+            if np.isfinite(NN['res']):
+                f = convolve_gauss(obsSpec.lam, obsSpec.flux, NN['res'], mode='res')
+                obsSpec = spectrum(obsSpec.lam, f, res=NN['res'])
+
+            prior = None
+            if not isinstance(solveFor, type(None)):
+                prior = {}
+                for l in NN['labelsKeys']:
+                    if l.lower() != solveFor.lower():
+                        prior[l.lower()] = obsSpec.__dict__[l]
+                prior['vbroad'] = 0.0
+
+            labelsFit, bestFitChi2 = fitToNeuralNetwork(obsSpec, NN, prior = prior, quite=True)
+            for i, l in enumerate(NN['labelsKeys']):
+                if l not in out:
+                    out.update({l:[]})
+                out[l].append(labelsFit[i])
+            out[f"diff_{solveFor}"].append( obsSpec.__dict__[solveFor] - out[solveFor][-1] )
+            d =  out[f"diff_{solveFor}"][-1]
+            print(f"Difference in {solveFor} is {d:.2f}")
+            out['chi2'].append(bestFitChi2)
+               
+            LogResults.write( f"{obsSpec.ID} " + '\t'.join(f"{l:.3f}" for l in labelsFit) + f"{bestFitChi2 : .3f} {d:.3f}\n")
+    for k in out.keys():
+        out[k] = np.array(out[k])
+    with open(f'./fittingResults_{NNid}_fitFor{solveFor}.pkl', 'wb') as f:
+        pickle.dump(out, f)
 
 if __name__ == '__main__':
     if len(argv) < 3:
@@ -237,7 +199,7 @@ if __name__ == '__main__':
             NN = readNN(nnPath)
             fOut.write('#  ' + '   '.join(f"{k}" for k in NN['labelsKeys']) + ' Vmac  Vrot  chi  SNR\n' )
             lim = [5300, 5600]
-            #lim = [5526, 5530]
+            lim = [5526, 5530]
             
             #profiler = cProfile.Profile()
             #profiler.enable()
