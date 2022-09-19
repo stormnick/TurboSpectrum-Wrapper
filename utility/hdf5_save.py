@@ -8,7 +8,8 @@ import cProfile
 import pstats
 from multiprocessing import Pool
 
-def gather_data(specList):
+def gather_data( arg ):
+    specList, wvl, labels, quite = arg
     # spectraList, wave_new, Rnew, quite, limits = arg
     spectraIncl = []
     # get the labels
@@ -22,6 +23,8 @@ def gather_data(specList):
     comments = []
 
     for i, specFile in enumerate(specList):
+        if not quite:
+            print(f"{1e2 * i/len(specList):.1f} %")
         spec = readSpectrumTSwrapper(specFile)
         spec.id = specFile.split('/')[-1]
         names.append(spec.id)
@@ -46,7 +49,9 @@ if __name__ == '__main__':
     # profiler = cProfile.Profile()
     # profiler.enable()
 
-    args = [ specList[i::ncpu] for i in range(ncpu)]
+    args = [ [specList[i::ncpu], wvl, labels, True] for i in range(ncpu)]
+    # unmute one sub-process
+    args[0][-1] = False
     with Pool(processes=ncpu) as pool:
         out = pool.map(gather_data, args )
 

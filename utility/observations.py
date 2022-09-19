@@ -9,45 +9,46 @@ from functools import reduce
 from astropy import constants as const
 from astropy.modeling import Fittable1DModel, Parameter
 from copy import deepcopy
+from scipy import signal
 
 def readSpectrumTSwrapper(filePath):
     with open(filePath, 'r') as f:
         data = f.readlines()
-    specData = [l for l in data if not l.startswith('#') and not '*' in l and np.isfinite(float(l.split()[-1])) ]
-    if len(specData) > 0:
-        wvl, flux = np.loadtxt(specData, unpack=True, usecols=(0,1), dtype=float)
-        spec = spectrum(wvl,  flux, res = np.inf)
-        spec.labels = []
-        header = []
-        for l in data:
-            if len(l.replace('#', '').replace('\n', '').strip()) == 0:
-                break
-            if l.startswith('#'):
-                header.append(l)
-        #fundPar = header[3:7]
-        fundPar = header[4:8]
-        for l in fundPar:
-            k, v = l.replace('#','').split('=')
-            k = k.strip().lower()
-            v = float(v.replace('\n','').strip())
-            spec.__dict__[k] = v
-            spec.labels.append(k)
-        #elements = header[7:]
-        elements = header[8:]
-        for l in elements:
-           el, abund = l.replace('#','').split('=')
-           el = el.split('(')[-1].split(')')[0].strip()
-           if '(' in abund:
-               abund = abund.split('(')[0].strip()
-           if '[' in abund:
-               abund = abund.split('[')[0].strip()
-           abund = float(abund)
-           spec.__dict__[el] = abund
-           spec.labels.append(el)
-        return spec
-    else:
-        print(f"empty file {filePath}")
+    #specData = [l for l in data if not l.startswith('#') and not '*' in l and np.isfinite(float(l.split()[-1])) ]
+    #if len(specData) > 0:
+        #wvl, flux = np.loadtxt(specData, unpack=True, usecols=(0,1), dtype=float)
+    wvl, flux = np.loadtxt(data, unpack=True, usecols=(0,1), dtype=float)
+    spec = spectrum(wvl,  flux, res = np.inf)
+    if len(spec.flux) == 0:
         return None
+    spec.labels = []
+    header = []
+    for l in data:
+        if len(l.replace('#', '').replace('\n', '').strip()) == 0:
+            break
+        if l.startswith('#'):
+            header.append(l)
+    #fundPar = header[3:7]
+    fundPar = header[4:8]
+    for l in fundPar:
+        k, v = l.replace('#','').split('=')
+        k = k.strip().lower()
+        v = float(v.replace('\n','').strip())
+        spec.__dict__[k] = v
+        spec.labels.append(k)
+    #elements = header[7:]
+    elements = header[8:]
+    for l in elements:
+       el, abund = l.replace('#','').split('=')
+       el = el.split('(')[-1].split(')')[0].strip()
+       if '(' in abund:
+           abund = abund.split('(')[0].strip()
+       if '[' in abund:
+           abund = abund.split('[')[0].strip()
+       abund = float(abund)
+       spec.__dict__[el] = abund
+       spec.labels.append(el)
+    return spec
 
 def read_observations(path, format):
     """ Read observed spectrum """
@@ -111,6 +112,28 @@ def select_within_linemask(line_masks, element, w_obs, w_model, debug=False):
 
         return lm['w_center'], ind_obs, ind_model, check
 
+def convolve_gauss(x, y, V, mode = 'broadening'):
+    """
+    mode can be 'resolution' or 'broadening' for Vrot, Vmac, etc
+    for cont norm. spectra only?
+    """
+    #print(f"Vbroad = {V}")
+    if 'res' in mode.lower():
+        delta = x / V
+    elif 'broad' in mode.lower():
+        delta =  x * V / const.c.to('km/s').value
+    else: 
+        print(f"Can not understand mode {mode} provided to convolve_gauss")
+        exit()
+    std = delta / (2.0 * np.sqrt(2. * np.log(2.))) / np.gradient(x)
+    gauss = signal.gaussian(len(x), std)
+    y1 = np.convolve(y, gauss, mode='same')
+    grad = np.gradient(y1)
+    mask = np.where(np.abs(grad) < np.std(grad)/3)
+    cont = np.mean(y1[mask])
+    y1 = y1/cont
+    #y1 = y1/max(y1)
+    return y1
 
 class spectrum(object):
     def __init__(self, w, f, res):
@@ -122,10 +145,12 @@ class spectrum(object):
         # determine step of the datapoints
         self.lam_step = np.median(self.lam[1:] - self.lam[:-1])
 
-
     def convolve_resolution(self, R_new, quite=True):
+        if len(np.unique(np.gradient(self.lam))) > 1:
+            print("Warning..")
         if not quite:
             print(F"Convolving spectrum from R={self.R} to R={R_new}...")
+<<<<<<< HEAD
         fwhmMean = (np.mean(self.lam)/R_new) / (2.0 * np.sqrt(2. * np.log(2.))) / self.lam_step
         x_size=1501*int(fwhmMean)
         if x_size % 2 == 0:

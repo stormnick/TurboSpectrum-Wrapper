@@ -105,6 +105,7 @@ def readNN(NNpath, quite=False):
             for i in range(len(NNet['labelsKeys'])):
                 print(f"{NNet['labelsKeys'][i]}: min = {min(NNet['labelsInput'][i])}  \
 max = {max(NNet['labelsInput'][i])}")
+        print(f"Resolution, R = {NNet['res']}")
 
     return NNet
 
