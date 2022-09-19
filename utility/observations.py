@@ -129,7 +129,7 @@ class spectrum(object):
         fwhmMean = (np.mean(self.lam)/R_new) / (2.0 * np.sqrt(2. * np.log(2.))) / self.lam_step
         x_size=1501*int(fwhmMean)
         if x_size % 2 == 0:
-            x_size += 1 
+            x_size += 1
         nbins = int(len(self.lam)/x_size)+1
         if nbins > len(self.lam):
             nbins = len(self.lam)
@@ -167,7 +167,7 @@ class spectrum(object):
                 # kernel should always have odd size  along all axis
                 x_size=1501*int(fwhmMean)
                 if x_size % 2 ==0:
-                    x_size += 1 
+                    x_size += 1
                 nbins = int(len(self.lam)/x_size)+1
                 if nbins > len(self.lam):
                     nbins = len(self.lam)
@@ -209,7 +209,7 @@ class spectrum(object):
                 # kernel should always have odd size along all axis
                 x_size=1501*int(fwhmMean)
                 if x_size % 2 ==0:
-                    x_size += 1 
+                    x_size += 1
                 nbins = int(len(self.lam)/x_size)+1
                 if nbins > len(self.lam):
                     nbins = len(self.lam)

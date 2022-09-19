@@ -8,29 +8,29 @@ import cProfile
 import pstats
 from multiprocessing import Pool
 
-def gather_data( arg ):
-    specList, wvl, labels = arg
+def gather_data(specList):
     # spectraList, wave_new, Rnew, quite, limits = arg
     spectraIncl = []
     # get the labels
+    spec = readSpectrumTSwrapper(specList[0])
+    wvl = spec.lam
     totSize = len(specList)
-    labels = { k:np.full( totSize, np.nan ) for k in labels}
-    flxl = np.full( shape=( totSize, len(wvl) ), fill_value = np.nan )
+    labels = { k:np.full( totSize, np.nan ) for k in spec.labels}
+    flxl = np.zeros( shape=( totSize, len(spec.lam) ) )
     names = []
     ## TODO:
     comments = []
 
     for i, specFile in enumerate(specList):
         spec = readSpectrumTSwrapper(specFile)
-        names.append(specFile)
-        if not isinstance(spec, type(None)):
-            flxl[i] = np.interp(wvl, spec.lam, spec.flux)
-            for k in labels:
-                if k in spec.__dict__:
-                    labels[k][i] = spec.__dict__[k]
-        # fluxes and labels are initialised to NaNs
-        else: pass
-                
+        spec.id = specFile.split('/')[-1]
+        names.append(spec.id)
+
+        flxl[i] = spec.flux
+        for k in labels:
+            labels[k][i] = spec.__dict__[k]
+        names = np.array(names)
+        comments = np.array(comments)
 
     return (flxl, labels, wvl, names)
 
@@ -41,37 +41,28 @@ if __name__ == '__main__':
         ncpu = int(argv[2])
     else:
         ncpu = 1
-    specList = glob.glob(path)
-    print(f"found {len(specList)} files...")
+    specList = glob.glob(path)[:10]
 
     # profiler = cProfile.Profile()
     # profiler.enable()
-    spec = readSpectrumTSwrapper(specList[0])
-    wvl = spec.lam
-    labels = spec.labels
 
-    args = [ [specList[i::ncpu], wvl, labels] for i in range(ncpu)]
+    args = [ specList[i::ncpu] for i in range(ncpu)]
     with Pool(processes=ncpu) as pool:
         out = pool.map(gather_data, args )
 
     flxl = np.vstack( list(out[i][0] for i in range(len(out))) )
-    labels = { k : np.hstack( list(out[i][1][k] for i in range(len(out))) ) for k in out[0][1]  }
-    names = []
-    for i in range(len(out)):
-        names.extend( out[i][3])
-    names = [a.encode('utf8') for a in names]
+    labels = { k : list(out[i][1][k] for i in range(len(out))) for k in out[0][1]}
+    names = np.vstack( list(out[i][3] for i in range(len(out))) )
 
     with h5py.File('./test.h5', 'w') as hf:
-        hf.create_dataset( 'flux', data=flxl, shape=np.shape(flxl), dtype='float64')
-        hf.create_dataset('labelKeys', data = [a.encode('utf8') for a in labels] )
+        hf.create_dataset( 'fluxes', data=flxl, shape=np.shape(flxl), dtype='float64')
         for k in labels:
             hf.create_dataset( f"{k}", data=labels[k] )
         hf.create_dataset( 'wave', data=out[0][2], dtype='float64')
         hf.create_dataset( 'ID', data=names)
 
-    with h5py.File('./test.h5', 'r') as hf:
-        print( list(hf.keys()) )
-        #print( [a.decode('utf8') for a in hf['ID']] )
+    # with h5py.File('./test.h5', 'r') as hf:
+    #     print( list(hf.keys()) )
     # stats = pstats.Stats(profiler).sort_stats('cumulative')
     # stats.print_stats()
 
