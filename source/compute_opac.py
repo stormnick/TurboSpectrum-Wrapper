@@ -14,12 +14,17 @@ def babsma_worker(args):
         print(atmFile)
         atmos = model_atmosphere()
         atmos.read(atmFile, setup.atmos_format)
-        atmos.path = atmFile
        
         " Where to write opacities "
         modelOpacFile = f"{setup.cwd}_{atmos.id}_{setup.jobID}"
         # TODO: add specific keywords to ts_input and update TS to write requested opacities
-        setup.ts_input['MARCS-FILE'] = '.true.'
+        if setup.atmos_format.strip() == 'marcs':
+            setup.ts_input['MARCS-FILE'] = '.true.'
+            atmos.path = atmFile
+        else: 
+            atmos.path = f"{setup.cwd}/{atmos.ID}.dat"
+            write_atmos_m1d4TS(atmos,  atmos.path)
+            
         compute_babsma(setup.ts_input, atmos, modelOpacFile, quite=setup.debug)
 
 
