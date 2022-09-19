@@ -9,7 +9,7 @@ import pstats
 from multiprocessing import Pool
 
 def gather_data( arg ):
-    specList, wvl, labels = arg
+    specList, wvl, labels, quite = arg
     # spectraList, wave_new, Rnew, quite, limits = arg
     spectraIncl = []
     # get the labels
@@ -21,6 +21,8 @@ def gather_data( arg ):
     comments = []
 
     for i, specFile in enumerate(specList):
+        if not quite:
+            print(f"{1e2 * i/len(specList):.1f} %")
         spec = readSpectrumTSwrapper(specFile)
         names.append(specFile)
         if not isinstance(spec, type(None)):
@@ -50,7 +52,9 @@ if __name__ == '__main__':
     wvl = spec.lam
     labels = spec.labels
 
-    args = [ [specList[i::ncpu], wvl, labels] for i in range(ncpu)]
+    args = [ [specList[i::ncpu], wvl, labels, True] for i in range(ncpu)]
+    # unmute one sub-process
+    args[0][-1] = False
     with Pool(processes=ncpu) as pool:
         out = pool.map(gather_data, args )
 
