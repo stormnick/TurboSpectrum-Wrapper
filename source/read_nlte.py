@@ -265,3 +265,27 @@ def find_distance_to_point(point, grid):
 at pointer = {grid['pointer'][pos[0]]}\n"
         return pos[0], comment
     else: return pos[0], ''
+
+
+def restoreDepartScaling(depart, el):
+    """
+    Departure coefficients are normalised and brought to the log scale
+    for the ease of interpolation.
+    This functions brings them back to the initial units
+
+    Parameters
+    ----------
+    depart : np.ndarray
+        normalised departure coefficients
+    el : ChemElement
+        chemical element corresponding to the departure coeffcicients
+        (scaling is the same for all departure coefficients of the same
+        chemical element)
+
+    Returns
+    -------
+    np.ndarray
+        Departure coefficient in original units
+        as read from the binary NLTE grid
+    """
+    return 10**(depart * el.DepartScaling)
