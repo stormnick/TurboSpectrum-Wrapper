@@ -79,6 +79,7 @@ on log12 scale. Please double check input file '{file}'")
     # TODO: move free parameters as a sub-dictinary of the return
     return input_par, freeParams
 
+
 class setup(object):
     """
     Describes the setup requested for computations
@@ -89,7 +90,7 @@ class setup(object):
         path to the configuration file, './config.txt' by default
 
     """
-    def __init__(self, file='./config.txt'):
+    def __init__(self, file='./config.txt', mode='MAinterpolate'):
         if 'cwd' not in self.__dict__.keys():
             self.cwd = f"{os.getcwd()}/"
         self.debug = 0
@@ -97,73 +98,12 @@ class setup(object):
         self.nlte = 0
         self.safeMemory = 250 # Gb
 
+        supportModes = ['MAinterpolate', 'MAprovided']
+        if mode not in supportModes:
+            print(f"Unknown mode in setup(): supported options are {supportModes}")
+            exit()
 
-        "Read all the keys from the config file"
-        for line in open(file, 'r').readlines():
-            line = line.strip()
-            if not line.startswith('#') and len(line)>0:
-                if not '+=' in line:
-                    k, val = line.split('=')
-                    k, val = k.strip(), val.strip()
-                    if val.startswith("'") or val.startswith('"'):
-                        self.__dict__[k] = val[1:-1]
-                    elif val.startswith("["):
-                        if '[' in val[1:]:
-                            if not k in self.__dict__ or len(self.__dict__[k]) == 0:
-                                self.__dict__[k] = []
-                            self.__dict__[k].append(val)
-                        else:
-                            self.__dict__[k] = eval('np.array(' + val + ')')
-                    elif '.' in val:
-                        self.__dict__[k] = float(val)
-                    else:
-                        self.__dict__[k] = int(val)
-                elif '+=' in line:
-                    k, val = line.split('+=')
-                    k, val = k.strip(), val.strip()
-                    if len(self.__dict__[k]) == 0:
-                        self.__dict__[k] = []
-                    self.__dict__[k].append(val)
-
-        if 'inputParams_file' in self.__dict__:
-            self.inputParams, self.freeInputParams = read_random_input_parameters(self.inputParams_file)
-        else:
-            print("Missing file with input parameters: inputParams_file")
-
-        if 'nlte_config' in self.__dict__:
-            """ Read provided NLTE grids and model atoms
-             and match to the elements requested in the input file"""
-            for l in self.nlte_config:
-                l = l.replace('[','').replace(']','').replace("'","")
-                elID, files = l.split(':')[0].strip().capitalize(),\
-                                [f.strip() for f in l.split(':')[-1].split(',')]
-                if 'nlte_grids_path' in self.__dict__:
-                    files = [ f"{self.nlte_grids_path.strip()}/{f}" for f in files]
-                files = [ f.replace('./', self.cwd) if f.startswith('./') \
-                                                    else f  for f in files]
-
-                if (elID not in self.inputParams['elements']) and self.debug:
-                    print(f"NLTE data is provided for {elID}, \
-but it is not a free parameter in the input file {self.inputParams_file}.")
-                else:
-                    el = self.inputParams['elements'][elID]
-                    el.nlte = True
-                    el.nlteGrid = files[0]
-                    el.nlteAux = files[1]
-                    el.modelAtom = files[2]
-
-            "TS needs to access model atoms from the same path for all elements"
-            if 'modelAtomsPath' not in self.__dict__.keys():
-                self.modelAtomsPath = f"{self.cwd}/modelAtoms_links/"
-                if os.path.isdir(self.modelAtomsPath):
-                    shutil.rmtree(self.modelAtomsPath)
-                os.mkdir(self.modelAtomsPath)
-
-                "Link provided model atoms to this directory"
-                for el in self.inputParams['elements'].values():
-                    if el.nlte:
-                        dst = self.modelAtomsPath + el.modelAtom.split('/')[-1]
-                        os.symlink(el.modelAtom, dst )
+        self.read_config_file(flie)
 
         """ Any element to be treated in NLTE eventually? """
         for el in self.inputParams['elements'].values():
@@ -182,18 +122,53 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
         if not os.path.isdir(self.spectraDir):
             os.mkdir(self.spectraDir)
 
-        "Temporary directories for NLTE files"
-        for el in self.inputParams['elements'].values():
-            if el.nlte:
-                el.departDir = self.cwd + f"/{el.ID}_nlteDepFiles/"
-                if not  os.path.isdir(el.departDir):
-                    os.mkdir(el.departDir)
+        if self.nlte:
+            "Temporary directories for NLTE files"
+            for el in self.inputParams['elements'].values():
+                if el.nlte:
+                    el.departDir = self.cwd + f"/{el.ID}_nlteDepFiles/"
+                    if not  os.path.isdir(el.departDir):
+                        os.mkdir(el.departDir)
 
-        if 'depthScale' not in self.__dict__:
-            self.depthScaleNew = np.linspace(-5, 2, 60)
-        else: self.depthScaleNew = np.array(depthScale[0], depthScale[1], depthScale[2])
+            "TS needs to access model atoms from the same path for all elements"
+            if 'modelAtomsPath' not in self.__dict__.keys():
+                self.modelAtomsPath = f"{self.cwd}/modelAtoms_links/"
+                if os.path.isdir(self.modelAtomsPath):
+                    shutil.rmtree(self.modelAtomsPath)
+                os.mkdir(self.modelAtomsPath)
 
-        self.interpolate()
+                "Link provided model atoms to this directory"
+                for el in self.inputParams['elements'].values():
+                    if el.nlte:
+                        dst = self.modelAtomsPath + el.modelAtom.split('/')[-1]
+                        os.symlink(el.modelAtom, dst )
+
+        if mode.strip() == 'MAinterpolate':
+            """
+            All model atmospheres should exist on the same depth scale --
+            here, tau500 -- for correct interpolation
+            """
+            if 'depthScale' not in self.__dict__:
+                self.depthScaleNew = np.linspace(-5, 2, 60)
+            else: self.depthScaleNew = np.array(depthScale[0], depthScale[1], depthScale[2])
+
+            self.interpolate()
+
+        elif mode.strip() == 'MAprovided':
+            if 'atm_path' not in self.__dict__ or 'atm_list' not in self.__dict__:
+                print("Provide path to model atmospheres 'atm_path' \
+and path to file listing requested model atmospheres 'atm_list' \
+in the config file ")
+            self.atm_list = np.loadtxt(self.atm_list, ndmin=1)
+            self.atm_list = [ f.replace('./', self.cwd) if f.startswith('./') \
+                                    else f  for f in self.atm_list]
+
+            if self.debug:
+                print(f"Requested {len(self.atm_list):.0f} model atmospheres")
+            if 'atm_format' not in self.__dict__:
+                print("Provide one of the following format keys \
+in the config file as 'atm_format' ")
+                exit()
 
         "Some formatting required by TS routines"
         self.createTSinputFlags()
@@ -262,8 +237,6 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
                     del el.nlteData
                     del el.interpolator
 
-
-
     def createTSinputFlags(self):
         self.ts_input = { 'PURE-LTE':'.false.', 'MARCS-FILE':'.false.', 'NLTE':'.false.',\
         'NLTEINFOFILE':'', 'LAMBDA_MIN':4000, 'LAMBDA_MAX':9000, 'LAMBDA_STEP':0.05,\
@@ -304,3 +277,55 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
         "Any element in NLTE?"
         if self.nlte:
             self.ts_input['NLTE'] = '.true.'
+
+    def read_config_file(file):
+        "Read all the keys from the config file"
+        for line in open(file, 'r').readlines():
+            line = line.strip()
+            if not line.startswith('#') and len(line)>0:
+                if not '+=' in line:
+                    k, val = line.split('=')
+                    k, val = k.strip(), val.strip()
+                    if val.startswith("'") or val.startswith('"'):
+                        self.__dict__[k] = val[1:-1]
+                    elif val.startswith("["):
+                        if '[' in val[1:]:
+                            if not k in self.__dict__ or len(self.__dict__[k]) == 0:
+                                self.__dict__[k] = []
+                            self.__dict__[k].append(val)
+                        else:
+                            self.__dict__[k] = eval('np.array(' + val + ')')
+                    elif '.' in val:
+                        self.__dict__[k] = float(val)
+                    else:
+                        self.__dict__[k] = int(val)
+                elif '+=' in line:
+                    k, val = line.split('+=')
+                    k, val = k.strip(), val.strip()
+                    if len(self.__dict__[k]) == 0:
+                        self.__dict__[k] = []
+                    self.__dict__[k].append(val)
+
+        if 'inputParams_file' in self.__dict__:
+            self.inputParams, self.freeInputParams =
+             read_random_input_parameters(self.inputParams_file)
+
+        if 'nlte_config' in self.__dict__:
+            for l in self.nlte_config:
+                l = l.replace('[','').replace(']','').replace("'","")
+                elID, files = l.split(':')[0].strip().capitalize(),\
+                                [f.strip() for f in l.split(':')[-1].split(',')]
+                if 'nlte_grids_path' in self.__dict__:
+                    files = [ f"{self.nlte_grids_path.strip()}/{f}" for f in files]
+                files = [ f.replace('./', self.cwd) if f.startswith('./') \
+                                                    else f  for f in files]
+
+                if (elID not in self.inputParams['elements']) and self.debug:
+                    print(f"NLTE data is provided for {elID}, \
+    but it is not a free parameter in the input file {self.inputParams_file}.")
+                else:
+                    el = self.inputParams['elements'][elID]
+                    el.nlte = True
+                    el.nlteGrid = files[0]
+                    el.nlteAux = files[1]
+                    el.modelAtom = files[2]
