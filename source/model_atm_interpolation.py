@@ -13,7 +13,29 @@ import time
 import warnings
 # local
 from atmos_package import model_atmosphere
-from read_nlte import write_departures_forTS
+from read_nlte import read_fullNLTE_grid, find_distance_to_point,  write_departures_forTS, restoreDepartScaling
+
+def gradient3rdOrder(f):
+    for i in range(3):
+        f = np.gradient(f, edge_order=2)
+    return f
+
+def in_hull(p, hull):
+    """
+    Is triangulation-based interpolation to this point possible?
+
+    Parameters
+    ----------
+    p : dict
+        point to test, contains coordinate names as keys and their values, e.g.
+        p['teff'] = 5150
+    hull :
+
+    Returns
+    -------
+    whether point is inside the hull
+    """
+    return hull.find_simplex(p) >= 0
 
 
 def get_all_ma_parameters(models_path, depthScaleNew, format='m1d', debug = False):
@@ -303,8 +325,8 @@ def prepInterpolation_NLTE(setup, el, interpolCoords, rescale = False, depthScal
     """ Scaling departure coefficients for the most efficient interpolation """
 
     el.nlteData['depart'] = np.log10(el.nlteData['depart']+ 1.e-20)
-    if setup.debug:
-        pos = np.isnan(el.nlteData['depart'])
+    pos = np.isnan(el.nlteData['depart'])
+    if setup.debug and np.sum(pos) > 0:
         print(f"{np.sum(pos)} points become NaN under log10") # none should become NaN
     el.DepartScaling = np.max(np.max(el.nlteData['depart'], axis=1), axis=0)
     el.nlteData['depart'] = el.nlteData['depart'] / el.DepartScaling

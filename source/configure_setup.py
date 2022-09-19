@@ -4,38 +4,14 @@ import shutil
 from sys import argv, exit
 import datetime
 import glob
-from scipy.spatial import Delaunay
 from scipy.interpolate import interp1d
 # local
-from model_atm_interpolation import get_all_ma_parameters, NDinterpolateGrid,preInterpolationTests
-from read_nlte import read_fullNLTE_grid, find_distance_to_point
+from model_atm_interpolation import get_all_ma_parameters, prepInterpolation_MA, interpolateAllPoints_MA,  prepInterpolation_NLTE, interpolateAllPoints_NLTE
 from atmos_package import model_atmosphere
 from read_nlte import write_departures_forTS, read_departures_forTS, restoreDepartScaling
 import cProfile
 import pstats
 from chemical_elements import ChemElement
-
-def gradient3rdOrder(f):
-    for i in range(3):
-        f = np.gradient(f, edge_order=2)
-    return f
-
-def in_hull(p, hull):
-    """
-    Is triangulation-based interpolation to this point possible?
-
-    Parameters
-    ----------
-    p : dict
-        point to test, contains coordinate names as keys and their values, e.g.
-        p['teff'] = 5150
-    hull :
-
-    Returns
-    -------
-    whether point is inside the hull
-    """
-    return hull.find_simplex(p) >= 0
 
 def read_random_input_parameters(file):
     """
