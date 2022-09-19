@@ -103,7 +103,7 @@ class setup(object):
             print(f"Unknown mode in setup(): supported options are {supportModes}")
             exit()
 
-        self.read_config_file(flie)
+        self.read_config_file(file)
 
         """ Any element to be treated in NLTE eventually? """
         for el in self.inputParams['elements'].values():
@@ -155,19 +155,20 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
             self.interpolate()
 
         elif mode.strip() == 'MAprovided':
-            if 'atm_path' not in self.__dict__ or 'atm_list' not in self.__dict__:
-                print("Provide path to model atmospheres 'atm_path' \
-and path to file listing requested model atmospheres 'atm_list' \
+            if 'atmos_path' not in self.__dict__ or 'atmos_list' not in self.__dict__:
+                print("Provide path to model atmospheres 'atmos_path' \
+and path to file listing requested model atmospheres 'atmos_list' \
 in the config file ")
-            self.atm_list = np.loadtxt(self.atm_list, ndmin=1)
-            self.atm_list = [ f.replace('./', self.cwd) if f.startswith('./') \
-                                    else f  for f in self.atm_list]
+                exit()
+            self.atmos_list = np.loadtxt(self.atmos_list, ndmin=1, dtype=str)
+            self.atmos_list = np.array([ self.atmos_path + f.replace('./', self.cwd) if f.startswith('./') \
+                                    else self.atmos_path + f  for f in self.atmos_list])
 
             if self.debug:
-                print(f"Requested {len(self.atm_list):.0f} model atmospheres")
-            if 'atm_format' not in self.__dict__:
+                print(f"Requested {len(self.atmos_list):.0f} model atmospheres")
+            if 'atmos_format' not in self.__dict__:
                 print("Provide one of the following format keys \
-in the config file as 'atm_format' ")
+in the config file as 'atmos_format' ")
                 exit()
 
         "Some formatting required by TS routines"
@@ -268,7 +269,8 @@ in the config file as 'atm_format' ")
             else:
                 llFormatted.append(path)
         self.linelist = llFormatted
-        print(f"Linelist(s) will be read from: {' ; '.join(str(x) for x in self.linelist)}")
+        if self.debug:
+            print(f"Linelist(s) will be read from: {' ; '.join(str(x) for x in self.linelist)}")
 
         self.ts_input['NFILES'] = len(self.linelist)
         self.ts_input['LINELIST'] = '\n'.join(self.linelist)
@@ -278,7 +280,7 @@ in the config file as 'atm_format' ")
         if self.nlte:
             self.ts_input['NLTE'] = '.true.'
 
-    def read_config_file(file):
+    def read_config_file(self, file):
         "Read all the keys from the config file"
         for line in open(file, 'r').readlines():
             line = line.strip()
@@ -307,7 +309,7 @@ in the config file as 'atm_format' ")
                     self.__dict__[k].append(val)
 
         if 'inputParams_file' in self.__dict__:
-            self.inputParams, self.freeInputParams =
+            self.inputParams, self.freeInputParams =\
              read_random_input_parameters(self.inputParams_file)
 
         if 'nlte_config' in self.__dict__:
