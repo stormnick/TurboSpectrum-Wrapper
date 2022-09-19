@@ -265,7 +265,7 @@ Treated in LTE instead."
                     elementalConfig.append( cnfg )
 
                 create_NlteInfoFile(elementalConfig, set.modelAtomsPath, '', nlteInfoFile)
-            else: 
+            else:
                 nlteInfoFile =  None
 
             "Run bsyn.f for spectral synthesis"

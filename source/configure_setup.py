@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 from model_atm_interpolation import get_all_ma_parameters, NDinterpolateGrid,preInterpolationTests
 from read_nlte import read_fullNLTE_grid, find_distance_to_point
 from atmos_package import model_atmosphere
-from read_nlte import write_departures_forTS, read_departures_forTS
+from read_nlte import write_departures_forTS, read_departures_forTS, restoreDepartScaling
 import cProfile
 import pstats
 from chemical_elements import ChemElement
@@ -37,28 +37,7 @@ def in_hull(p, hull):
     """
     return hull.find_simplex(p) >= 0
 
-def restoreDepartScaling(depart, el):
-    """
-    Departure coefficients are normalised and brought to the log scale
-    for the ease of interpolation.
-    This functions brings them back to the initial units
 
-    Parameters
-    ----------
-    depart : np.ndarray
-        normalised departure coefficients
-    el : ChemElement
-        chemical element corresponding to the departure coeffcicients
-        (scaling is the same for all departure coefficients of the same
-        chemical element)
-
-    Returns
-    -------
-    np.ndarray
-        Departure coefficient in original units
-        as read from the binary NLTE grid
-    """
-    return 10**(depart * el.DepartScaling)
 
 def read_random_input_parameters(file):
     """
