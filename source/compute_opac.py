@@ -4,7 +4,7 @@ import numpy as np
 from multiprocessing import Pool
 # local
 from configure_setup import setup
-from run_ts import compute_babsma
+from run_ts import compute_babsma, compute_bsyn
 from atmos_package import model_atmosphere
 
 
