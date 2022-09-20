@@ -106,10 +106,11 @@ class setup(object):
         self.read_config_file(file)
 
         """ Any element to be treated in NLTE eventually? """
-        for el in self.inputParams['elements'].values():
-            if el.nlte:
-                self.nlte = True
-                break
+        if 'inputParams_file' in self.__dict__:
+            for el in self.inputParams['elements'].values():
+                if el.nlte:
+                    self.nlte = True
+                    break
 
         if 'nlte_config' not in self.__dict__ or not self.nlte:
             print(f"{50*'*'}\n Note: all elements will be computed in LTE!\n \
