@@ -16,6 +16,9 @@ import time
 import shutil
 from IPython.display import clear_output
 
+def normalisePayneLabels(labels, xmax, xmin):
+    return (labels-xmin)/(xmax-xmin) - 0.5
+
 def callNN(wavelength, obsSpec, NNdict, p0, freeLabels, setLabels, mask, quite=True):
     """
      To ensure the best convergence this function needs to be called on normalised labels (in p0)
@@ -208,10 +211,10 @@ EMCEE stuff
 """
 def likelihood(labels, x, y, yerr, NN):
     ANNlabels = labels[:-1]
-    #Vbroad = labels[-2]
+    #ANNlabels = [5421.00,  2.72, 0.70, -1.51, 5.95, 3.88, 3.46]
+    #ANNlabels.append(labels[0])
     log_f = labels[-1]
-    #modelFlux = restore(x, NN, ANNlabels)
-    modelFlux = restoreFromNormLabels(x, NN, ANNlabels)
+    modelFlux = restore(x, NN, ANNlabels )
     #if Vbroad > 0.0:
     #    flux = convolve_gauss(x, modelFlux, Vbroad, mode='broad')
     #if NN['res'] < np.inf:
@@ -220,20 +223,21 @@ def likelihood(labels, x, y, yerr, NN):
     return -0.5 * np.sum((y - modelFlux) ** 2 / sigma2 + np.log(sigma2))
 
 def prior(labels, NN):
-    annLabels = labels[:-1]
+    ANNlabels = labels[:-1]
+    #ANNlabels = [5421.00,  2.72, 0.70, -1.51, 5.95, 3.88, 3.46]
+    #ANNlabels.append(labels[0])
     log_f = labels[-1]
-    # our labels are normalised, so it's easy
-    check = np.full(len(annLabels), False)
-    for i in range(len(annLabels)):
-        #if NN['x_min'][i]  < annLabels[i] < NN['x_max'][i]:
-        if -0.5  < annLabels[i] < 0.5:
+    check = np.full(len(ANNlabels), False)
+    for i in range(len(ANNlabels)):
+        if NN['x_min'][i]  < ANNlabels[i] < NN['x_max'][i]:
             check[i] = True
     if check.all() and -10.0 < log_f < 1.0:
         return 0.0
     else:
         return -np.inf
 
-def probability(labels, x, y, yerr, NN):
+def probability(labels, x, y, yerr, NNpath):
+    NN = readNN(NNpath, quite=True)
     lp = prior(labels, NN)
     if not np.isfinite(lp):
         return -np.inf
@@ -241,56 +245,44 @@ def probability(labels, x, y, yerr, NN):
         return likelihood(labels, x, y, yerr, NN) + lp
     
 def MCMCwithANN(NNpath, specPath):
-    profiler = cProfile.Profile()
-    profiler.enable()
+    #import mkl
+    #mkl.set_num_threads(100)
+
     NN = readNN(NNpath)
     spec = readSpectrumTSwrapper(specPath)  
-    w, f = spec.lam, spec.flux
-    for l in spec.labels:
+    #spec.cut([6170, 6190])
+    spec.cut([min(NN['wvl']), max(NN['wvl'])])
+    computedLabels = [ spec.__dict__[k] for k  in NN['labelsKeys'] ]
+    for l in NN['labelsKeys']:
         print(f"{l} = {spec.__dict__[l]:.2f}")
+    w, f = spec.lam, spec.flux
     ferr = np.full(len(f), 0.01)
     import emcee
-    # + 1 for log_f which is probability  and +1 for Vbroad which is not a label in ANN, skipping Vbroad for now
-    labels_true = np.zeros(len(NN['labelsKeys']) + 1 )
-    initial = np.zeros(len(NN['labelsKeys']) + 1 )
 
-    # A good way of finding this numerical optimum of this likelihood function is to use the scipy.optimize module:
-    from scipy.optimize import minimize
+    startingPoint = ( NN['x_max'] + NN['x_min'] ) / 2.
+    #startingPoint = computedLabels
+    print(startingPoint)
+    startingPoint = np.hstack([startingPoint, [-5]])
+    # Ni
+    #startingPoint[7] = startingPoint[7] - 1
+    #startingPoint.append(-5)
+    #startingPoint = [3, -5]
+    nwalkers = 32
+    pos = np.array(startingPoint) + np.random.randn(nwalkers, len(startingPoint)) * 1e-2 * startingPoint.T
 
-    nll = lambda *args: -likelihood(*args)
+    ndim = pos.shape[1]
+    from multiprocessing import Pool
 
-    #soln = minimize(nll, initial, args=(w, f, ferr, NN))
-    #print("Max. likelihood from LS minimisation:")
-    #labels_ml = soln.x
-    #for i in range(len(labels_ml)-1):
-    #    print(f"{NN['labelsKeys'][i]} = {labels_ml[i]:.3f}") 
-    #print('here probability is :')
-    #print(probability(soln.x, w, f, ferr, NN))
-    #pos = soln.x + 1e-4 * np.random.randn(32, len(initial))
-    solnx  = [ 0.230, -0.232, 0.051, -0.546, -0.277, -0.220, -0.134, 0.045, -1]
-    print( (np.array(solnx[:-1]) + 0.5) * ( NN['x_max'] - NN['x_min'] ) + NN['x_min'] )
-    pos = np.array(solnx) + 1e-2 * np.random.randn(32, len(initial))
+    with Pool(processes=nwalkers) as pool:
     
-    # use mean labels as starting point for MC since LS fails anyways
-    #pos = initial + 1e-4 * np.random.randn(32, len(initial))
+        sampler = emcee.EnsembleSampler(
+            nwalkers, ndim, probability, pool = pool, args=(w, f, ferr, NNpath)
+        )
+        sampler.run_mcmc(pos, 100, progress=True)
 
-    nwalkers, ndim = pos.shape
-
-    sampler = emcee.EnsembleSampler(
-        nwalkers, ndim, probability, args=(w, f, ferr, NN)
-    )
-    sampler.run_mcmc(pos, 1000, progress=True)
-    profiler.disable()
-    with open('./stats.log', 'w') as stream:
-        stats = pstats.Stats(profiler, stream = stream).sort_stats('cumulative')
-        stats.print_stats()
     flat_samples = sampler.get_chain(discard=10, thin=1, flat=True)
     for i in range(ndim-1):
         mcmc = np.percentile(flat_samples[:, i], [16, 50, 84])
-        #q = np.diff(mcmc)
-        #print(f"{NN['labelsKeys'][i]} = {mcmc[1]:.3f} + {q[0]:.3f} - {q[1]:.3f}")
-        # restore normalisation
-        mcmc = (mcmc + 0.5) * ( NN['x_max'][i] - NN['x_min'][i] ) + NN['x_min'][i]
         q = np.diff(mcmc)
         print(f"{NN['labelsKeys'][i]} = {mcmc[1]:.3f} + {q[0]:.3f} - {q[1]:.3f}")
     i = ndim-1
@@ -368,7 +360,7 @@ if __name__ == '__main__':
             #profiler.disable()
             #stats = pstats.Stats(profiler).sort_stats('cumulative')
             #stats.print_stats()
-profiler.disable()
-with open('./log_profiler.txt', 'w') as stream:
-    stats = pstats.Stats(profiler, stream = stream).sort_stats('cumulative')
-    stats.print_stats()
+#profiler.disable()
+#with open('./log_profiler.txt', 'w') as stream:
+#    stats = pstats.Stats(profiler, stream = stream).sort_stats('cumulative')
+#    stats.print_stats()

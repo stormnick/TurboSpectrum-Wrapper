@@ -150,7 +150,6 @@ class spectrum(object):
             print("Warning..")
         if not quite:
             print(F"Convolving spectrum from R={self.R} to R={R_new}...")
-<<<<<<< HEAD
         fwhmMean = (np.mean(self.lam)/R_new) / (2.0 * np.sqrt(2. * np.log(2.))) / self.lam_step
         x_size=1501*int(fwhmMean)
         if x_size % 2 == 0:
