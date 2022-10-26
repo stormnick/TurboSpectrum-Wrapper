@@ -228,6 +228,9 @@ def parallel_worker(arg):
             """ Compute model atmosphere opacity with babsma.f"""
             modelOpacFile = F"{set.ts_input['ts_root']}/opac_{atmos.id}_{set.jobID}"
             compute_babsma(set.ts_input, atmos, modelOpacFile, True)
+            if not os.path.isfile(modelOpacFile):
+                print("It seems that babsma.f failed and did not produce a spectrum, check ./babsma.log")
+
 
             """ Compute the spectrum """
             specResultFile = f"{tempDir}/spec_{i:.0f}_{['NLTE' if set.nlte else 'LTE'][0]}"
@@ -287,6 +290,9 @@ Treated in LTE instead."
                     for l in open(specResultFile, 'r').readlines():
                         moveSpec.write(l)
                 os.remove(specResultFile)
+            else:
+                print("It seems that bsyn.f failed and did not produce a spectrum, check ./bsyn.log")
+          
 
             """ Clean up """
             os.remove(atmos.path)
