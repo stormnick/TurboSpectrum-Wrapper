@@ -249,13 +249,21 @@ in the config file as 'atmos_format' ")
 
 
         """ At what wavelenght range to compute a spectrum? """
+        # sort just in case values are mixed up
         self.lam_start, self.lam_end = min(self.lam_end, self.lam_start), \
                                     max(self.lam_end, self.lam_start)
-        self.wave_step = np.mean([self.lam_start, self.lam_end]) / self.resolution
+
         self.ts_input['LAMBDA_MIN'] = self.lam_start
         self.ts_input['LAMBDA_MAX'] = self.lam_end
-        self.ts_input['LAMBDA_STEP'] = self.wave_step
         self.ts_input['ts_root'] = self.ts_root
+
+        if 'lam_step' in self.__dict__:
+            self.ts_input['LAMBDA_STEP'] = self.lam_step
+        elif 'resolution' in  self.__dict__:
+            self.ts_input['LAMBDA_STEP'] = np.mean([self.lam_start, self.lam_end]) / self.resolution
+        else:
+            print(f"Provide step for sampling the wavelength in the config file. Either 'lam_step' (in AA), or 'resolution' (FWHM at the mean wavelength will be step)")
+            exit()
 
 
         """ Linelists """

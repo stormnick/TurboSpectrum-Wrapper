@@ -27,5 +27,8 @@ nlte_config += [ Ba : [ 'Ba/NLTEgrid_Ba_MARCS_May-10-2021.bin', 'Ba/auxData_Ba_M
 lam_start = 5700
 # last wavelenght, AA
 lam_end = 7000
+# wavelength step (will be sampled uniformly across the spectrum)
+lam_step = 0.05
+# or
 # resolution per wavelenght (R capital)
-resolution = 1000000
+#resolution = 1000000
