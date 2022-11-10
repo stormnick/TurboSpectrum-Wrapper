@@ -151,7 +151,10 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
             """
             if 'depthScale' not in self.__dict__:
                 self.depthScaleNew = np.linspace(-5, 2, 60)
-            else: self.depthScaleNew = np.array(depthScale[0], depthScale[1], depthScale[2])
+            else: 
+                self.depthScaleNew = np.linspace(self.depthScale[0], self.depthScale[1], self.depthScale[2])
+                print(f"Updated depth scale to {len(self.depthScaleNew):.0f} points")
+             
 
             self.interpolate()
 
