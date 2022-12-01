@@ -282,7 +282,7 @@ in the config file as 'atmos_format' ")
                 llFormatted.append(path)
         self.linelist = llFormatted
         if self.debug:
-            print(f"Linelist(s) will be read from: {' ; '.join(str(x) for x in self.linelist)}")
+            print("Linelist(s) will be read from:" + '\n'.join(str(x) for x in self.linelist))
 
         self.ts_input['NFILES'] = len(self.linelist)
         self.ts_input['LINELIST'] = '\n'.join(self.linelist)

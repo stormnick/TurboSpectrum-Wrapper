@@ -46,17 +46,19 @@ def read_atmos_marcs(self, file):
     for line in data:
         if 'Number of depth points' in line:
             self.ndep = int(line.split()[0])
-    self.k, self.tau500, self.height, self.temp, self.ne = [], [], [], [], []
-    for line in data[25:25+self.ndep]:
-        spl = np.array( line.split() ).astype(float)
-        self.k.append(spl[0])
-        self.tau500.append(spl[2])
-        self.height.append(spl[3])
-        t = spl[4]
-        self.temp.append(t)
-        pe = spl[5]
-        ne =  pe / t / k_B
-        self.ne.append(ne)
+#    self.k, self.tau500, self.height, self.temp, self.ne = [], [], [], [], []
+    self.k, self.tau500, self.height, self.temp, self.pe = np.loadtxt(data[25:25+self.ndep], usecols=(0, 2, 3, 4, 5), unpack=True)
+#    for line in data[25:25+self.ndep]:
+#        spl = np.array( line.split() ).astype(float)
+#        self.k.append(spl[0])
+#        self.tau500.append(spl[2])
+#        self.height.append(spl[3])
+#        t = spl[4]
+#        self.temp.append(t)
+#        pe = spl[5]
+#        ne =  pe / t / k_B
+    self.ne = self.pe/self.temp/k_B
+#        self.ne.append(ne)
 
     self.vturb = np.full(self.ndep, self.vturb )
     self.vmac = np.zeros(self.ndep)
@@ -92,14 +94,7 @@ def read_atmos_m1d(self, file):
     self.logg = float(data[2])
     self.ndep = int(data[3])
     # read structure
-    self.depth_scale, self.temp, self.ne, self.vmac, self.vturb = [],[],[],[],[]
-    for line in data[ 4 : ]:
-        spl = np.array(line.split()).astype(float)
-        self.depth_scale.append( spl[0] )
-        self.temp.append( spl[1] )
-        self.ne.append( spl[2] )
-        self.vmac.append( spl[3] )
-        self.vturb.append( spl[4] )
+    self.depth_scale, self.temp, self.ne,  self.vmac, self.vturb = np.loadtxt(data[ 4 : ], unpack=True)
     # guess for the info that's not provided in the model atmosphere file:
     if not 'teff' in self.__dict__.keys():
         self.teff   = np.nan
@@ -211,7 +206,7 @@ class model_atmosphere(object):
                     self.feh = feh
                     self.alpha = self.feh
                 except:
-                    print("WARNING: [Fe/H] and [alpha/Fe] are unknown")
+                    #print("WARNING: [Fe/H] and [alpha/Fe] are unknown")
 
                     self.feh = np.nan
                     self.alpha = np.nan
