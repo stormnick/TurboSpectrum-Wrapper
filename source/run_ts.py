@@ -205,7 +205,7 @@ def parallel_worker(arg):
     if os.path.isdir(tempDir):
         shutil.rmtree(tempDir)
     os.mkdir(tempDir)
-    today = datetime.date.today().strftime("%b-%d-%Y")
+    today = f"{datetime.datetime.now().strftime('%b-%d-%Y-%H-%M-%S')}_{np.random.random()}"
 
     elements = set.inputParams['elements'].values()
 
@@ -238,7 +238,7 @@ def parallel_worker(arg):
 
 
                 header = f"computed with TS NLTE v.20 \n\
-by E.Magg (emagg at mpia dot de) \n\
+by N.Storm (storm at mpia dot de) \n\
 Date: {today} \n\
 Input parameters: \n\
 "

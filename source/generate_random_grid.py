@@ -35,11 +35,15 @@ if __name__ == '__main__':
     if len(argv) > 2:
         conf_file = argv[1]
     else:
-        print("Usage: $ pytnon generate_random_grid.py ./configFile.txt jobName")
-        exit()
+        conf_file = "config.txt"
+        #print("Usage: $ pytnon generate_random_grid.py ./configFile.txt jobName")
+        #exit()
 
     set = setup(file = conf_file)
     # TODO: assign random name / cwd name if empty or not provided
-    set.jobID = argv[2]
+    try:
+        set.jobID = argv[2]
+    except IndexError:
+        set.jobID = f"jobID_{np.random.random()}"
 
     run_TS_parallel(set)

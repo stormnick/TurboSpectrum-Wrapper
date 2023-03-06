@@ -118,7 +118,7 @@ To set up NLTE, use 'nlte_config' flag\n {50*'*'}")
 
         """ Create a directory to save spectra"""
         # TODO: all directory creation should be done at the same time
-        today = datetime.date.today().strftime("%b-%d-%Y")
+        today = f"{datetime.datetime.now().strftime('%b-%d-%Y-%H-%M-%S')}_{np.random.random()}"
         self.spectraDir = self.cwd + f"/spectra-{today}/"
         if not os.path.isdir(self.spectraDir):
             os.mkdir(self.spectraDir)
