@@ -12,6 +12,7 @@ from read_nlte import write_departures_forTS, read_departures_forTS, restoreDepa
 import cProfile
 import pstats
 from chemical_elements import ChemElement
+from create_window_linelist_function import create_window_linelist
 
 def read_random_input_parameters(file):
     """
@@ -274,13 +275,13 @@ in the config file as 'atmos_format' ")
         else:
             print(f"Can not understand the 'linelist' flag: {self.linelist}")
             exit(1)
-        llFormatted = []
-        for path in self.linelist:
-            if '*' in path:
-                llFormatted.extend( glob.glob(path) )
-            else:
-                llFormatted.append(path)
-        self.linelist = llFormatted
+
+        new_line_list_path = os.path.join(f"{os.getcwd()}", f"temp_linelist_{np.random.random()}", '')
+        os.makedirs(new_line_list_path)
+
+        create_window_linelist([self.lam_start - 5], [self.lam_end + 5], self.linelist, new_line_list_path, "True")
+
+        self.linelist = [i for i in glob.glob(os.path.join(new_line_list_path, "*"))]
         if self.debug:
             print("Linelist(s) will be read from:" + '\n'.join(str(x) for x in self.linelist))
 

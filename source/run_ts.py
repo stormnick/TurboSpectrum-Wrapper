@@ -183,7 +183,7 @@ def create_NlteInfoFile(elementalConfig, modelAtomsPath='', departureFilesPath='
             else:
                 nlte_info_file.write(F"{z}  '{ID}'  'lte' ''  '' 'ascii' \n")
 
-def parallel_worker(arg):
+def parallel_worker(set, ind):
     """
     Responsible for organising computations and talking to TS
     Creates model atmosphers, opacity file (by running babsma.f),
@@ -200,7 +200,6 @@ def parallel_worker(arg):
         positional indexes of stellar labels and individual abundances
         compuations will be done consequently for each index
     """
-    set, ind = arg
     tempDir = f"{set.cwd}/job_{set.jobID}_{min(ind)}_{max(ind)}/"
     if os.path.isdir(tempDir):
         shutil.rmtree(tempDir)
@@ -208,98 +207,98 @@ def parallel_worker(arg):
     today = f"{datetime.datetime.now().strftime('%b-%d-%Y-%H-%M-%S')}_{np.random.random()}"
 
     elements = set.inputParams['elements'].values()
+    i = ind
 
-    for i in ind:
-        # TODO: move writing intrpolated model somewhere else, maybe even right after intrpolation
-        atmos = model_atmosphere()
-        if not isinstance(set.inputParams['modelAtmInterpol'][i], type(None)):
-            """ Compute the spectrum """
-            specResultFile = f"{tempDir}/spec_{i:.0f}_{['NLTE' if set.nlte else 'LTE'][0]}"
-            if not os.path.isfile(specResultFile):
+    # TODO: move writing intrpolated model somewhere else, maybe even right after intrpolation
+    atmos = model_atmosphere()
+    if not isinstance(set.inputParams['modelAtmInterpol'][i], type(None)):
+        """ Compute the spectrum """
+        specResultFile = f"{tempDir}/spec_{i:.0f}_{['NLTE' if set.nlte else 'LTE'][0]}"
+        if not os.path.isfile(specResultFile):
 
-                atmos.depth_scale, atmos.temp, atmos.ne, atmos.vturb = \
-                    set.inputParams['modelAtmInterpol'][i]
-                set.inputParams['modelAtmInterpol'][i] = None
-                atmos.temp, atmos.ne = 10**(atmos.temp), 10**(atmos.ne)
-                atmos.depth_scale_type = 'TAU500'
-                atmos.feh, atmos.logg = set.inputParams['feh'][i], set.inputParams['logg'][i]
-                atmos.spherical = False
-                atmos.id = f"interpol_{i:05d}_{set.jobID}"
-                atmos.path = f"{tempDir}/atmos.{atmos.id}"
-    
-                atmos.write(atmos.path, format = 'ts')
-    
-                """ Compute model atmosphere opacity with babsma.f"""
-                modelOpacFile = F"{set.ts_input['ts_root']}/opac_{atmos.id}_{set.jobID}"
-                compute_babsma(set.ts_input, atmos, modelOpacFile, True)
-                if not os.path.isfile(modelOpacFile):
-                    print("It seems that babsma.f failed and did not produce a spectrum, check ./babsma.log")
+            atmos.depth_scale, atmos.temp, atmos.ne, atmos.vturb = \
+                set.inputParams['modelAtmInterpol'][i]
+            set.inputParams['modelAtmInterpol'][i] = None
+            atmos.temp, atmos.ne = 10**(atmos.temp), 10**(atmos.ne)
+            atmos.depth_scale_type = 'TAU500'
+            atmos.feh, atmos.logg = set.inputParams['feh'][i], set.inputParams['logg'][i]
+            atmos.spherical = False
+            atmos.id = f"interpol_{i:05d}_{set.jobID}"
+            atmos.path = f"{tempDir}/atmos.{atmos.id}"
 
+            atmos.write(atmos.path, format = 'ts')
+
+            """ Compute model atmosphere opacity with babsma.f"""
+            modelOpacFile = F"{set.ts_input['ts_root']}/opac_{atmos.id}_{set.jobID}"
+            compute_babsma(set.ts_input, atmos, modelOpacFile, True)
+            if not os.path.isfile(modelOpacFile):
+                print("It seems that babsma.f failed and did not produce a spectrum, check ./babsma.log")
 
 
-                header = f"computed with TS NLTE v.20 \n\
+
+            header = f"computed with TS NLTE v.20 \n\
 by N.Storm (storm at mpia dot de) \n\
 Date: {today} \n\
 Input parameters: \n\
 "
-                header += '\n'.join( f"{k} = {set.inputParams[k][i]}" for  k in set.freeInputParams)
-                header += '\n'
-                header += '\n'.join(f"A({el.ID}) = {el.abund[i]} {['NLTE' if el.nlte else 'LTE']}" for el in elements)
-                header += '\n'
-                header += '\n'
-    
-                "Create NLTE info file"
-                if set.nlte:
-                    elementalConfig = []
-                    nlteInfoFile   = f"{tempDir}/NLTEinfoFile_{set.jobID}.txt"
-                    for el in elements:
-                        if el.nlte:
-                            if not isinstance(el.departFiles[i], type(None)):
-                                cnfg = [
-                                        el.ID, el.Z, el.abund[i],
-                                        el.nlte, el.departFiles[i],
-                                        el.modelAtom.split('/')[-1]
-                                        ]
-                            else:
-                                cnfg = [ el.ID, el.Z, el.abund[i], False, '', '']
-                                set.inputParams['comments'][i] += f"\
-failed to create departure file for {el.ID} at A({el.ID}) = {el.abund[i]}. \
-Treated in LTE instead."
+            header += '\n'.join( f"{k} = {set.inputParams[k][i]}" for  k in set.freeInputParams)
+            header += '\n'
+            header += '\n'.join(f"A({el.ID}) = {el.abund[i]} {['NLTE' if el.nlte else 'LTE']}" for el in elements)
+            header += '\n'
+            header += '\n'
+
+            "Create NLTE info file"
+            if set.nlte:
+                elementalConfig = []
+                nlteInfoFile   = f"{tempDir}/NLTEinfoFile_{set.jobID}.txt"
+                for el in elements:
+                    if el.nlte:
+                        if not isinstance(el.departFiles[i], type(None)):
+                            cnfg = [
+                                    el.ID, el.Z, el.abund[i],
+                                    el.nlte, el.departFiles[i],
+                                    el.modelAtom.split('/')[-1]
+                                    ]
                         else:
                             cnfg = [ el.ID, el.Z, el.abund[i], False, '', '']
-                        elementalConfig.append( cnfg )
-    
-                    create_NlteInfoFile(elementalConfig, set.modelAtomsPath, '', nlteInfoFile)
-                else:
-                    nlteInfoFile =  None
-    
-                "Run bsyn.f for spectral synthesis"
-                elementalConfig = [ [el.Z, el.abund[i]] for el in set.inputParams['elements'].values() ]
-                compute_bsyn(
-                            set.ts_input, elementalConfig, \
-                            atmos, modelOpacFile, specResultFile, \
-                            nlteInfoFile, set.debug
-                )
-    
-                """ Add header, comments and save the spectrum to the common output directory """
-                if os.path.isfile(specResultFile) and os.path.getsize(specResultFile) > 0:
-                    with open(f"{set.spectraDir}/{specResultFile.split('/')[-1]}", 'w') as moveSpec:
-                        for l in header.split('\n'):
-                            moveSpec.write('#' + l + '\n')
-                        for l in set.inputParams['comments'][i].split('\n'):
-                            moveSpec.write('#' + l + '\n')
-                        moveSpec.write('#\n')
-                        for l in open(specResultFile, 'r').readlines():
-                            moveSpec.write(l)
-                    os.remove(specResultFile)
-                else:
-                    print("It seems that bsyn.f failed and did not produce a spectrum, check ./bsyn.log")
-              
-    
-                """ Clean up """
-                #os.remove(atmos.path)
-                os.remove(modelOpacFile)
-                os.remove(modelOpacFile+'.mod')
+                            set.inputParams['comments'][i] += f"\
+failed to create departure file for {el.ID} at A({el.ID}) = {el.abund[i]}. \
+Treated in LTE instead."
+                    else:
+                        cnfg = [ el.ID, el.Z, el.abund[i], False, '', '']
+                    elementalConfig.append( cnfg )
+
+                create_NlteInfoFile(elementalConfig, set.modelAtomsPath, '', nlteInfoFile)
+            else:
+                nlteInfoFile =  None
+
+            "Run bsyn.f for spectral synthesis"
+            elementalConfig = [ [el.Z, el.abund[i]] for el in set.inputParams['elements'].values() ]
+            compute_bsyn(
+                        set.ts_input, elementalConfig, \
+                        atmos, modelOpacFile, specResultFile, \
+                        nlteInfoFile, set.debug
+            )
+
+            """ Add header, comments and save the spectrum to the common output directory """
+            if os.path.isfile(specResultFile) and os.path.getsize(specResultFile) > 0:
+                with open(f"{set.spectraDir}/{specResultFile.split('/')[-1]}", 'w') as moveSpec:
+                    for l in header.split('\n'):
+                        moveSpec.write('#' + l + '\n')
+                    for l in set.inputParams['comments'][i].split('\n'):
+                        moveSpec.write('#' + l + '\n')
+                    moveSpec.write('#\n')
+                    for l in open(specResultFile, 'r').readlines():
+                        moveSpec.write(l)
+                os.remove(specResultFile)
+            else:
+                print("It seems that bsyn.f failed and did not produce a spectrum, check ./bsyn.log")
+
+
+            """ Clean up """
+            #os.remove(atmos.path)
+            os.remove(modelOpacFile)
+            os.remove(modelOpacFile+'.mod')
 
 if __name__ == '__main__':
     if len(argv) > 1:
