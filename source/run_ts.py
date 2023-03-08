@@ -200,10 +200,10 @@ def parallel_worker(set, ind):
         positional indexes of stellar labels and individual abundances
         compuations will be done consequently for each index
     """
-    tempDir = f"{set.cwd}/job_{set.jobID}_{min(ind)}_{max(ind)}/"
+    tempDir = f"{set.cwd}/temp_dir/job_{set.jobID}_{ind}/"
     if os.path.isdir(tempDir):
         shutil.rmtree(tempDir)
-    os.mkdir(tempDir)
+    os.makedirs(tempDir)
     today = f"{datetime.datetime.now().strftime('%b-%d-%Y-%H-%M-%S')}_{np.random.random()}"
 
     elements = set.inputParams['elements'].values()
