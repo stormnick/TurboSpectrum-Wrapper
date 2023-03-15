@@ -43,7 +43,7 @@ Will use {set.ncpu} CPUs instead")
     futures = []
 
     for one_index in ind:
-        scattered_future = client.scatter(set, one_index)
+        scattered_future = client.scatter([set, one_index])
         future = client.submit(parallel_worker, scattered_future)
         futures.append(future)
 

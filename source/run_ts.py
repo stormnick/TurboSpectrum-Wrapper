@@ -185,7 +185,7 @@ def create_NlteInfoFile(elementalConfig, modelAtomsPath='', departureFilesPath='
             else:
                 nlte_info_file.write(F"{z}  '{ID}'  'lte' ''  '' 'ascii' \n")
 
-def parallel_worker(set, ind):
+def parallel_worker(input_param):
     """
     Responsible for organising computations and talking to TS
     Creates model atmosphers, opacity file (by running babsma.f),
@@ -202,6 +202,7 @@ def parallel_worker(set, ind):
         positional indexes of stellar labels and individual abundances
         compuations will be done consequently for each index
     """
+    set, ind = input_param
     tempDir = f"{set.cwd}/temp_dir/job_{set.jobID}_{ind}/"
     if os.path.isdir(tempDir):
         shutil.rmtree(tempDir)
