@@ -188,7 +188,7 @@ def create_NlteInfoFile(elementalConfig, modelAtomsPath='', departureFilesPath='
             else:
                 nlte_info_file.write(F"{z}  '{ID}'  'lte' ''  '' 'ascii' \n")
 
-def parallel_worker(ind, cwd_path):
+def parallel_worker(ind):
     """
     Responsible for organising computations and talking to TS
     Creates model atmosphers, opacity file (by running babsma.f),
