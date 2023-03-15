@@ -8,6 +8,9 @@ import pickle
 import glob
 import time
 import datetime
+
+from distributed import get_worker
+
 # local
 from atmos_package import read_atmos_marcs, model_atmosphere
 
@@ -185,7 +188,7 @@ def create_NlteInfoFile(elementalConfig, modelAtomsPath='', departureFilesPath='
             else:
                 nlte_info_file.write(F"{z}  '{ID}'  'lte' ''  '' 'ascii' \n")
 
-def parallel_worker(input_param):
+def parallel_worker(ind, cwd_path):
     """
     Responsible for organising computations and talking to TS
     Creates model atmosphers, opacity file (by running babsma.f),
@@ -202,7 +205,13 @@ def parallel_worker(input_param):
         positional indexes of stellar labels and individual abundances
         compuations will be done consequently for each index
     """
-    set, ind = input_param
+    worker = get_worker()
+    try:
+        _ = worker.set
+    except AttributeError:
+        with open(f"{os.getcwd()}/temp_dir/pickled_setup", 'rb') as setup_pickled_file:
+            worker.set = pickle.load(setup_pickled_file)
+    set = worker.set
     tempDir = f"{set.cwd}/temp_dir/job_{set.jobID}_{ind}/"
     if os.path.isdir(tempDir):
         shutil.rmtree(tempDir)

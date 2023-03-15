@@ -7,6 +7,7 @@ from dask.distributed import Client
 # local
 from configure_setup import setup
 from run_ts import parallel_worker
+import pickle
 
 def run_TS_parallel(set):
     """
@@ -23,6 +24,9 @@ def run_TS_parallel(set):
         set.ncpu = set.inputParams['count']
         print(f"Requested more CPUs than jobs. \
 Will use {set.ncpu} CPUs instead")
+
+    with open(f"{set.cwd}/temp_dir/pickled_setup", "wb") as pickled_setup_file:
+        pickle.dump(set, pickled_setup_file)
 
     ind = np.arange(set.inputParams['count'])
 
@@ -43,7 +47,7 @@ Will use {set.ncpu} CPUs instead")
     futures = []
 
     for one_index in ind:
-        scattered_future = client.scatter([set, one_index])
+        scattered_future = client.scatter([one_index])
         future = client.submit(parallel_worker, scattered_future)
         futures.append(future)
 
