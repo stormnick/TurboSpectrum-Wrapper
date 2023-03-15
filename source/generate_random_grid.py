@@ -43,7 +43,8 @@ Will use {set.ncpu} CPUs instead")
     futures = []
 
     for one_index in ind:
-        future = client.submit(parallel_worker, set, one_index)
+        scattered_future = client.scatter(set, one_index)
+        future = client.submit(parallel_worker, scattered_future)
         futures.append(future)
 
     print("Start gathering")  # use http://localhost:8787/status to check status. the port might be different
