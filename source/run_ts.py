@@ -51,8 +51,9 @@ def compute_babsma(ts_input, atmos, modelOpacFile, quite=True):
     pr = subprocess.Popen(['./exec/babsma_lu'], stdin=subprocess.PIPE, \
         stdout=None, stderr=subprocess.STDOUT ) #open(cwd + '/babsma.log', 'w')
     pr.stdin.write(bytes(babsma_conf, 'utf-8'))
-    pr.communicate()
-    pr.wait()
+    #pr.communicate()
+    stdout, stderr = pr.communicate()
+    #pr.wait()
     os.chdir(cwd)
     if not quite:
         print(F"babsma: {time.time()-time0} seconds")
@@ -134,8 +135,9 @@ def compute_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResult
     pr = subprocess.Popen(['./exec/bsyn_lu'], stdin=subprocess.PIPE, \
         stdout=None, stderr=subprocess.STDOUT )  #open(cwd + '/bsyn.log', 'w')
     pr.stdin.write(bytes(bsyn_config, 'utf-8'))
-    pr.communicate()
-    pr.wait()
+    stdout, stderr = pr.communicate()
+    #pr.communicate()
+    #pr.wait()
     os.chdir(cwd)
     if not quite:
         print(F"bsyn: {time.time()-time0} seconds")
