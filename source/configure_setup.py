@@ -278,9 +278,9 @@ in the config file as 'atmos_format' ")
 
         new_line_list_path = os.path.join(f"{os.getcwd()}", f"temp_linelist_{np.random.random()}", '')
         os.makedirs(new_line_list_path)
-
+        print("Trimming linelist")
         create_window_linelist([self.lam_start - 5], [self.lam_end + 5], self.linelist, new_line_list_path, "True")
-
+        print("Trimmind complete")
         self.linelist = [i for i in glob.glob(os.path.join(new_line_list_path, "*"))]
         if self.debug:
             print("Linelist(s) will be read from:" + '\n'.join(str(x) for x in self.linelist))
