@@ -420,86 +420,88 @@ def interpolateAllPoints_NLTE(setup, el):
     """
     el.departFiles = np.full(setup.inputParams['count'], None)
     for i in range(len(el.abund)):
-        departFile = el.departDir + \
-                f"/depCoeff_{el.ID}_{el.abund[i]:.3f}_{i}.dat"
-        x, y = [], []
-        # TODO: introduce class for nlte grid and set exceptions if grid wasn't rescaled
-        tau = setup.depthScaleNew
-        for j in range(len(el.interpolator['abund'])):
-            point = [ setup.inputParams[k][i] / el.interpolator['normCoord'][j][k] \
-                     for k in el.interpolator['normCoord'][j] if k !='abund']
-            ab = el.interpolator['abund'][j]
-            departAb = el.interpolator['interpFunction'][j](point)[0]
-            if not np.isnan(departAb).all():
-                x.append(ab)
-                y.append(departAb)
-        x, y = np.array(x), np.array(y)
-        """
-        Now interpolate linearly along abundance axis
-        If only one point is present (e.g. A(H) is always 12),
-        take departure coefficient at that abundance
-        """
-        if len(x) >= 2:
-            if not el.isFe or el.isH:
-                abScale = el.abund[i] - setup.inputParams['feh'][i]
-            else:
-                abScale = el.abund[i]
-            if abScale > min(x) and abScale < max(x):
-                depart = interp1d(x, y, axis=0)(abScale)
-                depart = restoreDepartScaling(depart, el)
-            else:
-                depart = np.nan
-        elif len(x) == 1 and el.isH:
-            print(f'only one point at abundandance={x} found, will accept depart coeff.')
-            depart = y[0]
-            depart = restoreDepartScaling(depart, el)
-        else:
-            print(f"Found no departure coefficients \
-at A({el.ID}) = {el.abund[i]}, [Fe/H] = {setup.inputParams['feh'][i]} at i = {i}")
-            depart = np.nan
-
-        """
-        Check that no non-linearities are present
-        """
-        nonLin = False
-        if not np.isnan(depart).all():
-            for ii in range(np.shape(depart)[0]):
-                if (gradient3rdOrder( depart[ii] ) > 0.01).any():
-                    depart = np.nan
-                    nonLin = True
-                    setup.inputParams['comments'][i] += f"Non-linear behaviour in the interpolated departure coefficients \
-of {el.ID} found. Will be using the closest data from the grid instead of interpolated values.\n"
-                    break
-        if not nonLin:
-            print(f'no weird behaviour encountered for {el.ID} at abund={ el.abund[i]:.2f}')
-        else:
-            print(f"non-linearities for {el.ID} at abund={el.abund[i]:.2f}")
-        """
-        If interpolation failed e.g. if the point is outside of the grid,
-        find the closest point in the grid and take a departure coefficient
-        for that point
-        """
-        if np.isnan(depart).all():
-            if setup.debug:
-                print(f"attempting to find the closest point the in the grid of departure coefficients")
-# TODO: move the four routines below into model_atm_interpolation
-            point = {}
-            for k in el.interpolator['normCoord'][0]:
-                point[k] = setup.inputParams[k][i]
-            if 'abund' not in point:
-                point['abund'] = el.abund[i]
-            pos, comment = find_distance_to_point(point, el.nlteData)
-            depart = el.nlteData['depart'][pos]
-            depart = restoreDepartScaling(depart, el)
-            tau = el.nlteData['depthScale'][pos]
-
-            for k in el.interpolator['normCoord'][0]:
-                if ( np.abs(el.nlteData[k][pos] - point[k]) / point[k] ) > 0.5:
-                    for k in el.interpolator['normCoord'][0]:
-                        setup.inputParams['comments'][i] += f"{k} = {el.nlteData[k][pos]}\
-(off by {point[k] - el.nlteData[k][pos] }) \n"
-
-        write_departures_forTS(departFile, tau, depart, el.abund[i])
-        el.departFiles[i] = departFile
-        setup.inputParams['comments'][i] += el.comment
+        write_depart_file(el, i, setup)
     return setup
+
+
+def write_depart_file(el, i, setup):
+    departFile = el.departDir + \
+                 f"/depCoeff_{el.ID}_{el.abund[i]:.3f}_{i}.dat"
+    x, y = [], []
+    # TODO: introduce class for nlte grid and set exceptions if grid wasn't rescaled
+    tau = setup.depthScaleNew
+    for j in range(len(el.interpolator['abund'])):
+        point = [setup.inputParams[k][i] / el.interpolator['normCoord'][j][k] \
+                 for k in el.interpolator['normCoord'][j] if k != 'abund']
+        ab = el.interpolator['abund'][j]
+        departAb = el.interpolator['interpFunction'][j](point)[0]
+        if not np.isnan(departAb).all():
+            x.append(ab)
+            y.append(departAb)
+    x, y = np.array(x), np.array(y)
+    """
+            Now interpolate linearly along abundance axis
+            If only one point is present (e.g. A(H) is always 12),
+            take departure coefficient at that abundance
+            """
+    if len(x) >= 2:
+        if not el.isFe or el.isH:
+            abScale = el.abund[i] - setup.inputParams['feh'][i]
+        else:
+            abScale = el.abund[i]
+        if abScale > min(x) and abScale < max(x):
+            depart = interp1d(x, y, axis=0)(abScale)
+            depart = restoreDepartScaling(depart, el)
+        else:
+            depart = np.nan
+    elif len(x) == 1 and el.isH:
+        print(f'only one point at abundandance={x} found, will accept depart coeff.')
+        depart = y[0]
+        depart = restoreDepartScaling(depart, el)
+    else:
+        print(f"Found no departure coefficients \
+at A({el.ID}) = {el.abund[i]}, [Fe/H] = {setup.inputParams['feh'][i]} at i = {i}")
+        depart = np.nan
+    """
+            Check that no non-linearities are present
+            """
+    nonLin = False
+    if not np.isnan(depart).all():
+        for ii in range(np.shape(depart)[0]):
+            if (gradient3rdOrder(depart[ii]) > 0.01).any():
+                depart = np.nan
+                nonLin = True
+                setup.inputParams['comments'][i] += f"Non-linear behaviour in the interpolated departure coefficients \
+of {el.ID} found. Will be using the closest data from the grid instead of interpolated values.\n"
+                break
+    if not nonLin:
+        print(f'no weird behaviour encountered for {el.ID} at abund={el.abund[i]:.2f}')
+    else:
+        print(f"non-linearities for {el.ID} at abund={el.abund[i]:.2f}")
+    """
+            If interpolation failed e.g. if the point is outside of the grid,
+            find the closest point in the grid and take a departure coefficient
+            for that point
+            """
+    if np.isnan(depart).all():
+        if setup.debug:
+            print(f"attempting to find the closest point the in the grid of departure coefficients")
+        # TODO: move the four routines below into model_atm_interpolation
+        point = {}
+        for k in el.interpolator['normCoord'][0]:
+            point[k] = setup.inputParams[k][i]
+        if 'abund' not in point:
+            point['abund'] = el.abund[i]
+        pos, comment = find_distance_to_point(point, el.nlteData)
+        depart = el.nlteData['depart'][pos]
+        depart = restoreDepartScaling(depart, el)
+        tau = el.nlteData['depthScale'][pos]
+
+        for k in el.interpolator['normCoord'][0]:
+            if (np.abs(el.nlteData[k][pos] - point[k]) / point[k]) > 0.5:
+                for k in el.interpolator['normCoord'][0]:
+                    setup.inputParams['comments'][i] += f"{k} = {el.nlteData[k][pos]}\
+(off by {point[k] - el.nlteData[k][pos]}) \n"
+    write_departures_forTS(departFile, tau, depart, el.abund[i])
+    el.departFiles[i] = departFile
+    setup.inputParams['comments'][i] += el.comment
